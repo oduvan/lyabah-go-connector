@@ -1,0 +1,8 @@
+# Built program
+/goban-connector
+/goban-connector.exe
+/dist/
+
+# Test and tool output
+*.test
+*.out
