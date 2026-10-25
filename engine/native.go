@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/oduvan/lyabah-go-connector/protocol"
 )
@@ -34,6 +35,13 @@ type NativeOptions struct {
 // katago directly.
 type nativeEngine struct {
 	o NativeOptions
+
+	// startMu lets one Start run at a time, so that two starts of the same
+	// name cannot both run.
+	startMu sync.Mutex
+	// mu guards running: the processes that run now, by name.
+	mu      sync.Mutex
+	running map[string]*process
 }
 
 // NewNative makes the engine of native mode.
@@ -49,7 +57,13 @@ func NewNative(o NativeOptions) (Engine, error) {
 			return nil, errors.New("native mode needs " + f.name)
 		}
 	}
-	return &nativeEngine{o: o}, nil
+	// The folder must not change when the working folder does.
+	dir, err := filepath.Abs(o.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	o.DataDir = dir
+	return &nativeEngine{o: o, running: map[string]*process{}}, nil
 }
 
 // runDir holds the merged configs of running processes.
@@ -113,7 +127,39 @@ func (e *nativeEngine) Start(ctx context.Context, args []string) (Process, error
 	case human && e.o.HumanModel != "":
 		katagoArgs = append(katagoArgs, "-human-model", e.o.HumanModel)
 	}
-	return startProcess(command(ctx, e.o.Katago, katagoArgs, nil), func() { os.Remove(cfgFile) })
+
+	// Like the wrapper, which removes a container of the same name before
+	// it starts a new one: a process of the same name that still runs is
+	// killed first.
+	e.startMu.Lock()
+	defer e.startMu.Unlock()
+	e.mu.Lock()
+	old := e.running[name]
+	delete(e.running, name)
+	e.mu.Unlock()
+	if old != nil {
+		old.Kill()
+		old.Wait()
+	}
+
+	var p *process
+	done := func() {
+		os.Remove(cfgFile)
+		e.mu.Lock()
+		if p != nil && e.running[name] == p {
+			delete(e.running, name)
+		}
+		e.mu.Unlock()
+	}
+	started, err := startProcess(command(ctx, e.o.Katago, katagoArgs, nil), done)
+	if err != nil {
+		return nil, err
+	}
+	e.mu.Lock()
+	p = started.(*process)
+	e.running[name] = p
+	e.mu.Unlock()
+	return p, nil
 }
 
 // hasKey says whether the checked lines of game set key.

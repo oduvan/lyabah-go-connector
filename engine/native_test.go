@@ -336,8 +336,11 @@ func TestNativeSGF(t *testing.T) {
 		t.Errorf("put-sgf did not make the avoid-repeat folder: %v", err)
 	}
 	// Files that are not a game's SGF are not listed.
-	os.WriteFile(filepath.Join(sgfDir, "notes.txt"), nil, 0o600)
-	os.WriteFile(filepath.Join(sgfDir, "short.sgf"), nil, 0o600)
+	for _, name := range []string{"notes.txt", "short.sgf"} {
+		if err := os.WriteFile(filepath.Join(sgfDir, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if out, err := run("", "list-sgf", "7"); err != nil || out != "a1b2c3d4e5\nk7Qm2xPa9T\n" {
 		t.Errorf("list-sgf = %q, %v", out, err)
 	}
@@ -385,8 +388,11 @@ func TestNativeSGF(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	os.MkdirAll(filepath.Join(o.DataDir, "players", "lost+found"), 0o700)
-	os.MkdirAll(filepath.Join(o.DataDir, "players", "007"), 0o700)
+	for _, name := range []string{"lost+found", "007"} {
+		if err := os.MkdirAll(filepath.Join(o.DataDir, "players", name), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := run("\n  \n", "sync-users"); err == nil || !strings.Contains(err.Error(), "refusing an empty list of users") {
 		t.Errorf("sync-users with an empty list = %v", err)
 	}
@@ -397,12 +403,73 @@ func TestNativeSGF(t *testing.T) {
 	if err != nil || out != "removed 1 folders\n" {
 		t.Errorf("sync-users = %q, %v", out, err)
 	}
-	entries, _ := os.ReadDir(filepath.Join(o.DataDir, "players"))
+	entries, err := os.ReadDir(filepath.Join(o.DataDir, "players"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	var names []string
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
 	if strings.Join(names, " ") != "007 10 7 lost+found" {
 		t.Errorf("players after sync-users = %q", names)
+	}
+}
+
+func TestNativeDataDirIsAbsolute(t *testing.T) {
+	t.Chdir(t.TempDir())
+	e, err := NewNative(NativeOptions{
+		Katago: "katago", Model: "m.bin.gz", GTPConfig: "gtp.cfg", AnalysisConfig: "analysis.cfg",
+		DataDir: "data",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := e.(*nativeEngine).o.DataDir
+	if !filepath.IsAbs(dir) || filepath.Base(dir) != "data" {
+		t.Errorf("DataDir = %q; want an absolute path that ends in data", dir)
+	}
+}
+
+func TestNativeSameNameReplacesTheOldProcess(t *testing.T) {
+	e, _ := newTestNative(t, stubKatago(t))
+	ctx := context.Background()
+	start := func(name string) Process {
+		t.Helper()
+		p, err := e.Start(ctx, []string{"gtp", name, "--user", "7", "--no-human"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { p.Kill() })
+		return p
+	}
+	old := start("game-k7Qm2xPa9T")
+	other := start("game-a1b2c3d4e5")
+
+	// The old process of the same name is killed before the new one starts.
+	ended := make(chan error, 1)
+	go func() {
+		io.Copy(io.Discard, old.Stdout())
+		ended <- old.Wait()
+	}()
+	p := start("game-k7Qm2xPa9T")
+	select {
+	case err := <-ended:
+		if err == nil || !strings.Contains(err.Error(), "killed") {
+			t.Errorf("old process Wait = %v; want killed", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the old process of the same name still runs")
+	}
+
+	// The new one and the one with another name both answer.
+	for _, q := range []Process{p, other} {
+		if _, err := io.WriteString(q.Stdin(), "version\n"); err != nil {
+			t.Fatal(err)
+		}
+		line, err := bufio.NewReader(q.Stdout()).ReadString('\n')
+		if err != nil || line != "= 1.18.2\n" {
+			t.Errorf("answer to version = %q, %v", line, err)
+		}
 	}
 }
