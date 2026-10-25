@@ -28,9 +28,8 @@ With Go (version 1.26 or newer):
 
     go install github.com/oduvan/lyabah-go-connector/cmd/goban-connector@latest
 
-Or download a release for Linux, macOS or Windows (amd64 or arm64) from the
-[releases page](https://github.com/oduvan/lyabah-go-connector/releases),
-unpack it and put `goban-connector` somewhere in your PATH.
+Ready-made releases for Linux, macOS and Windows will come later. For now,
+install it with `go install` as above.
 
 ## Set up
 
@@ -64,16 +63,15 @@ Stop it with Ctrl-C. KataGo stops with it.
 
 ## The commands
 
-### `goban-connector pair CODE [--server URL] [--name NAME]`
+### `goban-connector pair CODE [--server URL]`
 
 Trades the pairing code for a token and saves it. It writes `server`,
 `token`, `connectorId` and `name` into the config file. Other fields in the
 file stay as they are.
 
 - `--server URL` is Goban's address. The default is `https://go.lyabah.com`.
-- `--name NAME` is the name that this computer tells Goban when it pairs.
-  The default is the computer's host name. Goban gives the connector its
-  final name, and `pair` prints it.
+
+The connector's name is the one you typed on the website. `pair` prints it.
 
 ### `goban-connector init ...`
 
@@ -91,11 +89,21 @@ Command mode:
 
 In native mode, if you do not give `--gtp-config` or `--analysis-config`,
 `init` writes a default file (`gtp.cfg` or `analysis.cfg`) next to the config
-file. The default is KataGo's example settings with `ponderingEnabled =
-false`, `reportAnalysisWinratesAs = BLACK`, `logToStderr = true` and
-`logAllGTPCommunication = false`. `--threads` (default 4) sets the number of
-search threads in it. If the file is already there, `init` keeps it, so your
-changes are safe.
+file. It is a short config of about ten lines that `init` writes itself:
+
+- `logToStderr = true`, with `logAllGTPCommunication` and `logSearchInfo`
+  turned off;
+- `ponderingEnabled = false` and `reportAnalysisWinratesAs = BLACK`;
+- `rules = tromp-taylor` (in `gtp.cfg` only);
+- the number of search threads: `numSearchThreads` in `gtp.cfg`, and
+  `numAnalysisThreads = 2` with `numSearchThreadsPerAnalysisThread` in
+  `analysis.cfg`. `--threads` (default 4) sets them;
+- the sizes of the network cache (`nnCacheSizePowerOfTwo = 20` and
+  `nnMutexPoolSizePowerOfTwo = 16`).
+
+Every other setting has KataGo's default value. Goban adds the settings of
+each game after these lines. If the file is already there, `init` keeps it,
+so your changes are safe.
 
 `init` saves file paths as full paths, so they still work when the program
 is started from another folder, for example as a service. Use the full path
@@ -164,7 +172,7 @@ it holds your token.
 | `gtpConfig` | Native mode: base config for games. |
 | `analysisConfig` | Native mode: base config for analysis. |
 | `dataDir` | Native mode: the folder for the players' files and the configs of running processes. Default: `data` next to the config file. |
-| `maxGames` | How many games may play on this computer at once. Default 2. |
+| `maxGames` | How many games this computer is meant to play at once. Default 2. The connector tells Goban this number and Goban stores it, but it does not limit the games yet. |
 
 You can edit the file by hand. Restart `goban-connector run` after a change.
 

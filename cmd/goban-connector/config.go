@@ -14,8 +14,8 @@ import (
 // configEnv is the environment variable that names the config file.
 const configEnv = "GOBAN_CONNECTOR_CONFIG"
 
-// defaultMaxGames is how many games may play at once when the config does
-// not say.
+// defaultMaxGames is the maxGames the connector reports when the config
+// does not say. Goban stores it but does not limit games with it yet.
 const defaultMaxGames = 2
 
 // Config is the config file. A field that is empty or 0 takes its default
@@ -120,7 +120,8 @@ func (c Config) dataDir(configFile string) string {
 	return c.DataDir
 }
 
-// maxGames is how many games may play at once.
+// maxGames is the number of games the connector reports in its hello.
+// Goban stores it but does not limit games with it yet.
 func (c Config) maxGames() int {
 	if c.MaxGames <= 0 {
 		return defaultMaxGames
@@ -139,9 +140,10 @@ func absPath(p string, keepBareName bool) (string, error) {
 	return filepath.Abs(p)
 }
 
-// baseConfig is the text of a default base config for KataGo: the example
-// settings of KataGo with the settings Goban needs. kind is "gtp" or
-// "analysis". Goban adds the settings of each game on top of it.
+// baseConfig is the text of a default base config for KataGo: a short
+// config of its own with the log, pondering, win rate, rules, thread and
+// cache settings. Every other setting keeps KataGo's default. kind is "gtp"
+// or "analysis". Goban adds the settings of each game on top of it.
 func baseConfig(kind string, threads int) string {
 	var b strings.Builder
 	if kind == "gtp" {

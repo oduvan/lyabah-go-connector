@@ -102,7 +102,9 @@ type Options struct {
 	Version string
 	// Mode is "command" or "native", as the hello message says it.
 	Mode string
-	// MaxGames is how many games may play on this computer at once.
+	// MaxGames is how many games this computer is meant to play at once.
+	// It is sent in the hello message. Goban stores it but does not limit
+	// games with it yet.
 	MaxGames int
 	// Log receives the log lines. Nil means slog.Default().
 	Log *slog.Logger

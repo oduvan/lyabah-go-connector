@@ -35,7 +35,7 @@ const (
 )
 
 const usage = `Usage:
-  goban-connector pair CODE [--server URL] [--name NAME]
+  goban-connector pair CODE [--server URL]
       Pair this computer with your Goban account. Get CODE with the
       "Connect a computer" button on the Goban website.
   goban-connector init --command PATH [--env KEY=VALUE]...
@@ -92,7 +92,7 @@ func newFlagSet(name string, w io.Writer) *flag.FlagSet {
 }
 
 // parseFlags parses args, which may have flags before and after the
-// positional arguments (the README writes "pair CODE --name NAME"). It
+// positional arguments (the README writes "pair CODE --server URL"). It
 // returns the positional arguments. A -h gives the exit code 0.
 func parseFlags(fs *flag.FlagSet, args []string) (positional []string, code int, ok bool) {
 	for {
@@ -133,13 +133,12 @@ func loadOwnConfig(stderr io.Writer) (path string, c Config, ok bool) {
 func pairCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("pair", stderr)
 	server := fs.String("server", "", "Goban's address (default: the config's server, else "+client.DefaultServer+")")
-	name := fs.String("name", "", "the name Goban shows for this computer (default: the computer's host name)")
 	codes, code, ok := parseFlags(fs, args)
 	if !ok {
 		return code
 	}
 	if len(codes) != 1 {
-		fmt.Fprintln(stderr, "Usage: goban-connector pair CODE [--server URL] [--name NAME]")
+		fmt.Fprintln(stderr, "Usage: goban-connector pair CODE [--server URL]")
 		return exitUsage
 	}
 
@@ -150,10 +149,9 @@ func pairCommand(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	if *server != "" {
 		cfg.Server = *server
 	}
-	hostname := *name
-	if hostname == "" {
-		hostname, _ = os.Hostname()
-	}
+	// Goban keeps the name given on the website. The host name only goes
+	// into the connector's info.
+	hostname, _ := os.Hostname()
 	res, err := client.Pair(ctx, cfg.server(), codes[0], client.PairInfo{
 		Hostname: hostname,
 		OS:       runtime.GOOS,

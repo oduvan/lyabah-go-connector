@@ -97,14 +97,16 @@ func TestPairSavesConfig(t *testing.T) {
 	writeConfig(t, path, Config{Mode: "command", Command: "/bin/wrapper", Env: []string{"A=1"}, MaxGames: 3, Token: "gct_old"})
 
 	// The code comes before the flags, like in the README.
-	code, out, errOut := goban(t, "pair", "abcd-efgh", "--server", srv.URL, "--name", "My PC")
+	code, out, errOut := goban(t, "pair", "abcd-efgh", "--server", srv.URL)
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 	if want := "Paired as Desk. Start it with: goban-connector run\n"; out != want {
 		t.Errorf("stdout = %q, want %q", out, want)
 	}
-	if got["code"] != "ABCDEFGH" || got["hostname"] != "My PC" || got["version"] != "dev" || got["os"] != runtime.GOOS {
+	// The host name is always the computer's own.
+	hostname, _ := os.Hostname()
+	if got["code"] != "ABCDEFGH" || got["hostname"] != hostname || got["version"] != "dev" || got["os"] != runtime.GOOS {
 		t.Errorf("pair request = %v", got)
 	}
 
@@ -173,6 +175,18 @@ func TestPairNeedsOneCode(t *testing.T) {
 		if code, _, errOut := goban(t, args...); code != 2 || !strings.Contains(errOut, "CODE") {
 			t.Errorf("%v: exit %d, stderr %q; want exit 2 and a hint", args, code, errOut)
 		}
+	}
+}
+
+// pair has no --name flag: Goban keeps the name given on the website.
+func TestPairHasNoNameFlag(t *testing.T) {
+	useConfig(t)
+	code, _, errOut := goban(t, "pair", "ABCD-EFGH", "--server", "http://127.0.0.1:1", "--name", "My PC")
+	if code != 2 || !strings.Contains(errOut, "-name") {
+		t.Errorf("exit %d, stderr %q; want exit 2 and the unknown flag", code, errOut)
+	}
+	if code, out, _ := goban(t, "help"); code != 0 || strings.Contains(out, "--name") {
+		t.Errorf("help: exit %d, stdout %q; want no --name", code, out)
 	}
 }
 
