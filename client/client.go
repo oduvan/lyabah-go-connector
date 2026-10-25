@@ -55,14 +55,19 @@ type Timing struct {
 	// Backoff are the waits before the next try after a failed or lost
 	// connection; the last one repeats (default 1, 2, 5, 10 s).
 	Backoff []time.Duration
+	// StreamWait is how long the connector waits, after a connection has
+	// dropped and every process was killed, for the processes' streams to
+	// end (default 5 s). Then it goes on without them.
+	StreamWait time.Duration
 }
 
 // DefaultTiming is the timing of the real connection.
 func DefaultTiming() Timing {
 	return Timing{
-		Ping:    15 * time.Second,
-		Missed:  2,
-		Backoff: []time.Duration{1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second},
+		Ping:       15 * time.Second,
+		Missed:     2,
+		Backoff:    []time.Duration{1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second},
+		StreamWait: 5 * time.Second,
 	}
 }
 
@@ -77,6 +82,9 @@ func (t Timing) withDefaults() Timing {
 	}
 	if len(t.Backoff) == 0 {
 		t.Backoff = d.Backoff
+	}
+	if t.StreamWait <= 0 {
+		t.StreamWait = d.StreamWait
 	}
 	return t
 }
@@ -379,7 +387,10 @@ func newConn(ctx context.Context, r *runner, ws *websocket.Conn) *conn {
 
 // serve reads messages until the connection ends. Then it kills every
 // process and waits until all of them and every other goroutine of the
-// connection have ended.
+// connection have ended. It waits at most Timing.StreamWait: a killed
+// process may leave a child that holds its stdout open (mainly on
+// Windows), and one such process must not stop the connector from
+// connecting again.
 func (c *conn) serve(ctx context.Context) error {
 	c.wg.Add(2)
 	go c.writer()
@@ -396,7 +407,7 @@ func (c *conn) serve(ctx context.Context) error {
 	c.ioCancel()
 	c.ws.CloseNow()
 	c.streams.killAll()
-	c.wg.Wait()
+	c.waitForGoroutines()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -404,6 +415,26 @@ func (c *conn) serve(ctx context.Context) error {
 		return c.reason
 	}
 	return closeReason(err)
+}
+
+// waitForGoroutines waits until every goroutine of the connection has
+// ended, but not longer than Timing.StreamWait. If some are still running,
+// it logs a warning and closes the processes' pipes, so that they can end
+// later.
+func (c *conn) waitForGoroutines() {
+	done := make(chan struct{})
+	go func() {
+		c.wg.Wait()
+		close(done)
+	}()
+	t := time.NewTimer(c.r.timing.StreamWait)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C:
+		c.r.log.Warn("A KataGo process did not end after it was killed. Going on without it.")
+		c.streams.closePipes()
+	}
 }
 
 // end ends the connection for reason, at once.

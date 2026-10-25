@@ -11,8 +11,10 @@ import (
 // Version is the protocol version the connector sends in its hello message.
 const Version = 1
 
-// MaxMessage is the biggest message, in bytes, that either side may send.
-const MaxMessage = 4 << 20
+// MaxMessage is the biggest message, in bytes, that either side may send:
+// 16 MiB. An SGF may be 5242880 bytes, and escaping it in JSON can nearly
+// double that.
+const MaxMessage = 16 << 20
 
 // The message types.
 const (

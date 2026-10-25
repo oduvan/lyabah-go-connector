@@ -110,6 +110,30 @@ func (t *streams) killAll() {
 	}
 }
 
+// closePipes closes the pipes of every process that is still in the table.
+// It is for processes that did not end after a kill: with the pipes closed
+// the goroutines that read and write them can end.
+func (t *streams) closePipes() {
+	t.mu.Lock()
+	all := make([]*stream, 0, len(t.m))
+	for _, s := range t.m {
+		all = append(all, s)
+	}
+	t.mu.Unlock()
+	for _, s := range all {
+		s.mu.Lock()
+		p := s.proc
+		s.mu.Unlock()
+		if p == nil {
+			continue
+		}
+		p.Stdin().Close()
+		if c, ok := p.Stdout().(io.Closer); ok {
+			c.Close()
+		}
+	}
+}
+
 func (s *stream) signal() {
 	select {
 	case s.wake <- struct{}{}:

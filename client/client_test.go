@@ -620,3 +620,113 @@ func TestServerURL(t *testing.T) {
 		}
 	}
 }
+
+// hangEngine starts processes that ignore Kill and whose stdout never ends
+// by itself, like a killed process whose child still holds the pipe.
+type hangEngine struct {
+	fakeEngine
+	proc chan *hangProc
+}
+
+func (e *hangEngine) Start(ctx context.Context, args []string) (engine.Process, error) {
+	if err := protocol.CheckProcessArgs(args); err != nil {
+		return nil, err
+	}
+	p := &hangProc{closed: make(chan struct{}), waited: make(chan struct{})}
+	e.event("start " + args[1])
+	e.proc <- p
+	return p, nil
+}
+
+// hangProc is a process that cannot be killed. Its stdout ends only when
+// the connector closes it.
+type hangProc struct {
+	closeOnce sync.Once
+	closed    chan struct{} // the connector closed stdout or stdin
+	waited    chan struct{} // Wait has returned
+}
+
+func (p *hangProc) Stdin() io.WriteCloser { return hangStdin{p} }
+func (p *hangProc) Stdout() io.Reader     { return hangStdout{p} }
+func (p *hangProc) Stderr() string        { return "" }
+func (p *hangProc) Kill() error           { return nil }
+func (p *hangProc) Wait() error {
+	<-p.closed
+	close(p.waited)
+	return errKilled
+}
+func (p *hangProc) release() { p.closeOnce.Do(func() { close(p.closed) }) }
+
+type hangStdin struct{ p *hangProc }
+
+func (s hangStdin) Write(b []byte) (int, error) { return len(b), nil }
+func (s hangStdin) Close() error                { return nil }
+
+type hangStdout struct{ p *hangProc }
+
+func (s hangStdout) Read([]byte) (int, error) {
+	<-s.p.closed
+	return 0, io.ErrClosedPipe
+}
+func (s hangStdout) Close() error { s.p.release(); return nil }
+
+// syncBuffer is a bytes.Buffer that many goroutines may write.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func TestStuckProcessDoesNotHoldTheReconnect(t *testing.T) {
+	g := newGoban(t)
+	e := &hangEngine{proc: make(chan *hangProc, 1)}
+	logs := &syncBuffer{}
+	ctx, cancel := context.WithCancel(context.Background())
+	errc := make(chan error, 1)
+	go func() {
+		errc <- Run(ctx, Options{
+			Server: g.url, Token: testToken, Engine: e, Version: "1.2.3", Mode: "command", MaxGames: 2,
+			Log:    slog.New(slog.NewTextHandler(logs, nil)),
+			Timing: Timing{Backoff: []time.Duration{10 * time.Millisecond}, StreamWait: 100 * time.Millisecond},
+		})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errc:
+		case <-time.After(10 * time.Second):
+			t.Error("Run did not return")
+		}
+	})
+
+	p := g.accept()
+	p.send(protocol.Message{Type: protocol.Start, Stream: 1, Args: []string{"gtp", "game-1", "--user", "7"}})
+	if m := p.recv(); m.Type != protocol.Started {
+		t.Fatalf("after start: %+v", m)
+	}
+	proc := <-e.proc
+	p.c.CloseNow()
+
+	// The stuck process does not stop the next connection.
+	g.accept()
+	if !strings.Contains(logs.String(), "did not end") {
+		t.Errorf("log = %q; want a warning that a process did not end", logs.String())
+	}
+	// The connector closed the pipes, so the stuck goroutines can end.
+	select {
+	case <-proc.waited:
+	case <-time.After(5 * time.Second):
+		t.Error("the pipes of the stuck process were not closed")
+	}
+}

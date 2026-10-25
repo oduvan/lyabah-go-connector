@@ -64,7 +64,7 @@ func TestMessageJSON(t *testing.T) {
 }
 
 func TestConstants(t *testing.T) {
-	if Version != 1 || MaxMessage != 4*1024*1024 {
+	if Version != 1 || MaxMessage != 16*1024*1024 {
 		t.Errorf("Version = %d, MaxMessage = %d", Version, MaxMessage)
 	}
 	types := map[string]string{
