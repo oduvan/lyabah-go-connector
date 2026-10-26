@@ -240,45 +240,6 @@ Then:
 By default a user service stops when you log out. To keep it running, use
 `loginctl enable-linger $USER`.
 
-<<<<<<< HEAD
-### Linux without root: a restart loop and cron
-
-`loginctl enable-linger` may need root. Without lingering, a user service
-does not run while nobody is logged in. Then a small loop and one crontab
-line do the same job, with no root at all.
-
-Save this as `~/goban-connector-loop.sh` and make it executable
-(`chmod +x ~/goban-connector-loop.sh`). Change the path of
-`goban-connector` if it is somewhere else.
-
-    #!/bin/sh
-    # Starts goban-connector again when it stops, except after exit
-    # code 3 (pair again) or 4 (another connector took over).
-    while true; do
-      "$HOME/go/bin/goban-connector" run >>"$HOME/goban-connector.log" 2>&1
-      code=$?
-      if [ "$code" -eq 3 ] || [ "$code" -eq 4 ]; then
-        echo "goban-connector stopped with exit code $code; not starting it again" >>"$HOME/goban-connector.log"
-        exit "$code"
-      fi
-      sleep 5
-    done
-
-Start it now, so that it keeps running after you log out:
-
-    setsid nohup ~/goban-connector-loop.sh >/dev/null 2>&1 &
-
-Then let cron start it after each reboot. Run `crontab -e` and add this line:
-
-    @reboot /home/YOURNAME/goban-connector-loop.sh
-
-To stop it, remove the crontab line and stop the loop and the program:
-
-    pkill -f goban-connector-loop.sh; pkill -f 'goban-connector run'
-
-The log grows without limit here. Move it away now and then, or point the
-loop at a log tool you already use.
-=======
 ### Linux without lingering: cron and a restart loop
 
 Lingering is a systemd setting for each user. When it is on, the user's own
@@ -332,11 +293,10 @@ line too if it should not start at boot:
 The log grows without a limit. Empty it from time to time
 (`: > ~/goban-connector/connector.log`).
 
-Goban's Jetson runs its connector this way when lingering is
-off. There the script `scripts/jetson-connector.sh` of the Goban repository
+Goban's Jetson runs its connector this way when lingering is off. There
+the script `scripts/jetson-connector.sh` of the Goban repository
 does all of the above: pairing, `init`, the loop, the crontab line, and a
 size limit for the log.
->>>>>>> fdc2b8e (README: run it with cron and a restart loop when lingering is off)
 
 ### macOS: a launchd agent
 
