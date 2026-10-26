@@ -240,6 +240,64 @@ Then:
 By default a user service stops when you log out. To keep it running, use
 `loginctl enable-linger $USER`.
 
+### Linux without lingering: cron and a restart loop
+
+Lingering is a systemd setting for each user. When it is on, the user's own
+systemd starts at boot and keeps running when nobody is logged in. When it
+is off, a user unit starts only when you log in and stops when you log out.
+Turning it on may need `sudo`. If you cannot or do not want to turn it on,
+use cron and a small loop instead. This needs no `sudo`.
+
+The loop starts `goban-connector run` again when it stops, and cron starts
+the loop at boot.
+
+1. Save this as `~/goban-connector/keep-running.sh`. Change the path of
+   `goban-connector` if it is somewhere else.
+
+        #!/bin/sh
+        # Starts goban-connector again when it stops, except after exit
+        # code 0 (stopped normally), 3 (the token is not valid any more)
+        # or 4 (another connector with the same token took over).
+        LOG="$HOME/goban-connector/connector.log"
+        while true; do
+          "$HOME/go/bin/goban-connector" run >> "$LOG" 2>&1
+          status=$?
+          case $status in
+            0 | 3 | 4) echo "goban-connector stopped with exit code $status" >> "$LOG"; exit "$status" ;;
+          esac
+          sleep 5
+        done
+
+2. Make it runnable and start it now, so it does not stop when you log
+   out:
+
+        chmod 755 ~/goban-connector/keep-running.sh
+        setsid nohup ~/goban-connector/keep-running.sh >/dev/null 2>&1 < /dev/null &
+
+3. Add a line to your crontab (`crontab -e`), so it starts at boot. Cron
+   does not understand `~` here, so write the full path:
+
+        @reboot /home/YOURNAME/goban-connector/keep-running.sh
+
+Check that exactly one connector runs, and read its log:
+
+    pgrep -af 'goban-connector run'
+    tail -f ~/goban-connector/connector.log
+
+To stop it, stop the loop first and then the program. Remove the crontab
+line too if it should not start at boot:
+
+    pkill -f keep-running.sh
+    pkill -f 'goban-connector run'
+
+The log grows without a limit. Empty it from time to time
+(`: > ~/goban-connector/connector.log`).
+
+The Goban server's own Jetson runs its connector this way when lingering is
+off. There the script `scripts/jetson-connector.sh` of the Goban repository
+does all of the above: pairing, `init`, the loop, the crontab line, and a
+size limit for the log.
+
 ### macOS: a launchd agent
 
 Save this as `~/Library/LaunchAgents/com.lyabah.goban-connector.plist`.
