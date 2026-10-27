@@ -293,8 +293,8 @@ line too if it should not start at boot:
 The log grows without a limit. Empty it from time to time
 (`: > ~/goban-connector/connector.log`).
 
-The Goban server's own Jetson runs its connector this way when lingering is
-off. There the script `scripts/jetson-connector.sh` of the Goban repository
+Goban's Jetson runs its connector this way when lingering is off. There
+the script `scripts/jetson-connector.sh` of the Goban repository
 does all of the above: pairing, `init`, the loop, the crontab line, and a
 size limit for the log.
 
