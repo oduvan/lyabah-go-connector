@@ -26,3 +26,7 @@ func killGroup(cmd *exec.Cmd) error {
 	}
 	return err
 }
+
+// killedError is the error of Wait after Kill. Here it already says
+// "signal: killed".
+func killedError(err error) error { return err }
