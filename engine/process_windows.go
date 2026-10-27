@@ -4,6 +4,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 )
@@ -23,3 +24,7 @@ func killGroup(cmd *exec.Cmd) error {
 	}
 	return err
 }
+
+// killedError is the error of Wait after Kill. Windows ends a killed
+// process with exit status 1, so the error says it was killed.
+func killedError(err error) error { return fmt.Errorf("killed (%w)", err) }

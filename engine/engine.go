@@ -94,6 +94,7 @@ type process struct {
 
 	mu     sync.Mutex
 	waited bool // Wait has returned: the process group may be gone
+	killed bool // Kill has killed it
 }
 
 func (p *process) Stdin() io.WriteCloser { return p.stdin }
@@ -105,6 +106,9 @@ func (p *process) Wait() error {
 		p.waitErr = p.cmd.Wait()
 		p.mu.Lock()
 		p.waited = true
+		if p.waitErr != nil && p.killed {
+			p.waitErr = killedError(p.waitErr)
+		}
 		p.mu.Unlock()
 		if p.done != nil {
 			p.done()
@@ -121,7 +125,11 @@ func (p *process) Kill() error {
 	if p.waited {
 		return nil
 	}
-	return killGroup(p.cmd)
+	err := killGroup(p.cmd)
+	if err == nil {
+		p.killed = true
+	}
+	return err
 }
 
 // command makes the exec.Cmd for name args…, in a process group of its own
