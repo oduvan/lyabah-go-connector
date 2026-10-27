@@ -193,14 +193,17 @@ func TestPairHasNoNameFlag(t *testing.T) {
 func TestInitCommandMode(t *testing.T) {
 	path := useConfig(t)
 	writeConfig(t, path, Config{Token: "gct_keep", Name: "Desk", Mode: "native", Katago: "old", Model: "old"})
+	// A full path on every system: on Windows, /usr/local/bin/… has no
+	// drive, so init would make it absolute.
+	wrapper := filepath.Join(t.TempDir(), "goban-katago")
 
-	code, _, errOut := goban(t, "init", "--command", "/usr/local/bin/goban-katago",
+	code, _, errOut := goban(t, "init", "--command", wrapper,
 		"--env", "GOBAN_KATAGO_PREFIX=gobanconn-", "--env", "B=2")
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 	c := readConfig(t, path)
-	if c.Mode != "command" || c.Command != "/usr/local/bin/goban-katago" ||
+	if c.Mode != "command" || c.Command != wrapper ||
 		strings.Join(c.Env, ",") != "GOBAN_KATAGO_PREFIX=gobanconn-,B=2" {
 		t.Errorf("config = %+v", c)
 	}
