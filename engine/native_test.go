@@ -129,19 +129,6 @@ func runFiles(t *testing.T, dataDir string) []string {
 	return names
 }
 
-// wasKilled tells whether err is what Wait gives for a killed process. On
-// Linux and macOS the error says "signal: killed". Windows has no signals: a
-// killed process just ends with exit status 1.
-func wasKilled(err error) bool {
-	if err == nil {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return strings.Contains(err.Error(), "exit status 1")
-	}
-	return strings.Contains(err.Error(), "killed")
-}
-
 func TestNativeRefusesFileKeys(t *testing.T) {
 	// A katago that does not exist: if the engine tried to start it, the
 	// error would say so instead of naming the config line.
@@ -297,7 +284,7 @@ func TestNativeGTP(t *testing.T) {
 		t.Errorf("Kill = %v", err)
 	}
 	io.Copy(io.Discard, p.Stdout())
-	if err := p.Wait(); !wasKilled(err) {
+	if err := p.Wait(); err == nil || !strings.Contains(err.Error(), "killed") {
 		t.Errorf("Wait after Kill = %v; want killed", err)
 	}
 
@@ -468,7 +455,7 @@ func TestNativeSameNameReplacesTheOldProcess(t *testing.T) {
 	p := start("game-k7Qm2xPa9T")
 	select {
 	case err := <-ended:
-		if !wasKilled(err) {
+		if err == nil || !strings.Contains(err.Error(), "killed") {
 			t.Errorf("old process Wait = %v; want killed", err)
 		}
 	case <-time.After(5 * time.Second):
