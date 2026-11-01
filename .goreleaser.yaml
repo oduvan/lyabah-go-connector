@@ -25,7 +25,11 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # No version in the name, so that
+    # https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_linux_amd64.tar.gz
+    # always gives the newest release. Goban's setup guide links to these
+    # addresses.
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
       - README.md

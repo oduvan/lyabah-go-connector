@@ -10,26 +10,53 @@ port, so you do not need to change your router or firewall.
 
 The program is called `goban-connector`.
 
-**Phase A.** This first version does not download KataGo for you. You need
-KataGo and a network file on your computer already. A later version may
-download them.
+The step-by-step guide is on Goban's website:
+**[go.lyabah.com/setup](https://go.lyabah.com/setup)**. This README has the
+same steps and the details.
 
 ## What you need
 
-- KataGo, installed and working on your computer (run `katago version` to
-  check). A GPU or a good CPU makes it faster.
-- A KataGo network file, like `kata1-b18c384nbt-s....bin.gz`. A human
-  network file is optional.
-- A Goban account.
+- KataGo, installed and working on your computer. Get it from
+  [KataGo's releases page](https://github.com/lightvector/KataGo/releases):
+  the OpenCL version for most graphics cards, CUDA or TensorRT for an NVIDIA
+  card, or Eigen for a computer without a graphics card. On macOS,
+  `brew install katago` installs it. Run `katago version` to check it.
+- A KataGo network file from
+  [katagotraining.org](https://katagotraining.org/networks/). The newest
+  `kata1-b18c384nbt-....bin.gz` is fast and strong. The human network
+  (`b18c384nbt-humanv0.bin.gz`, on KataGo's releases page) is optional; the
+  bot needs it to play like a person.
+- A Goban account. Accounts are created by the site owner.
+
+The connector does not download KataGo for you.
 
 ## Install
 
-With Go (version 1.26 or newer):
+Download the file for your computer from the
+[newest release](https://github.com/oduvan/lyabah-go-connector/releases/latest)
+and unpack it:
+
+| Computer | File |
+|----------|------|
+| Windows (64-bit) | [goban-connector_windows_amd64.zip](https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_windows_amd64.zip) |
+| Windows on ARM | [goban-connector_windows_arm64.zip](https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_windows_arm64.zip) |
+| Mac with Apple chip | [goban-connector_darwin_arm64.tar.gz](https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_darwin_arm64.tar.gz) |
+| Mac with Intel chip | [goban-connector_darwin_amd64.tar.gz](https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_darwin_amd64.tar.gz) |
+| Linux (64-bit) | [goban-connector_linux_amd64.tar.gz](https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_linux_amd64.tar.gz) |
+| Linux on ARM (Raspberry Pi, Jetson) | [goban-connector_linux_arm64.tar.gz](https://github.com/oduvan/lyabah-go-connector/releases/latest/download/goban-connector_linux_arm64.tar.gz) |
+
+Then open a terminal (on Windows, a Command Prompt) in that folder. The
+commands below run there: write `./goban-connector` on macOS and Linux, and
+`.\goban-connector.exe` on Windows. The examples below write just
+`goban-connector`, as if it were on your PATH.
+
+On macOS, if the system says it cannot check the program, run this once:
+
+    xattr -d com.apple.quarantine goban-connector
+
+With Go (version 1.26 or newer) you can build it instead:
 
     go install github.com/oduvan/lyabah-go-connector/cmd/goban-connector@latest
-
-Ready-made releases for Linux, macOS and Windows will come later. For now,
-install it with `go install` as above.
 
 ## Set up
 
@@ -49,6 +76,7 @@ install it with `go install` as above.
           --model /home/me/katago/kata1-b18c384nbt.bin.gz
 
    This writes two base config files for KataGo next to the config file.
+   With the human network, add `--human-model FILE`.
    See "The two modes" below for the other way to run KataGo.
 
 4. Start it:
@@ -352,7 +380,10 @@ Use Task Scheduler: a task that runs `goban-connector.exe run` at log on.
 
 A release is made by [GoReleaser](https://goreleaser.com) when a tag that
 starts with `v` is pushed (for example `v0.1.0`). It builds Linux, macOS and
-Windows programs for amd64 and arm64, with archives and a checksum file.
+Windows programs for amd64 and arm64, with archives and a checksum file. The
+archives have no version in their names (`goban-connector_linux_amd64.tar.gz`),
+so the `releases/latest/download/...` links above, and the ones on Goban's
+setup guide, always give the newest release. Keep these names.
 
 ## License
 
